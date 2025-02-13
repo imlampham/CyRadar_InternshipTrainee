@@ -1,177 +1,153 @@
 section .data
-    invalid_msg db "Invalid inputs!", 10, 0 
-    msg1 db "Enter first binary number (up to 16 bits): ", 0
-    msg2 db "Enter second binary number (up to 16 bits): ", 0
-    msg3 db "The sum in binary is: ", 0
-    newline db 10, 0
+    b1 dw 0                         ; Store first binary number (16-bit)
+    b2 dw 0                         ; Store second binary number (16-bit)
+    tb1 db "The first number (16-bit binary): ", 0
+    tb2 db "The second number  (16-bit binary): ", 0
+    tb3 db "The sum is: ", 0
+    error_msg db "Invalid input!", 10, 0
+    newline db 10, 0                ; Newline character for formatting output
 
 section .bss
-    buffer resb 17
-    num1 resb 17
-    num2 resb 17
-    result resb 17          ; Updated buffer size to 17 (16 bits + null terminator)
+    buffer resb 18                  ; Increased buffer size to prevent overflow
+    result resb 17                  ; Buffer to store binary result
 
 section .text
     global _start
 
 _start:
-    ; Input first binary number
-    mov rdx, 42                 ; Length of msg1
-    lea rsi, [rel msg1]         ; RIP-relative addressing for msg1
+    ; Prompt for first binary number
+    lea rsi, [rel tb1]
     call print_string
+    lea rsi, [rel buffer]
+    call read_binary                ; Read binary input from user
+    call validate_input             ; Check if input is valid
+    lea rsi, [rel buffer]
+    call binary_to_decimal          ; Convert binary string to decimal
+    mov word [rel b1], ax           ; Store result in b1
 
-    lea rsi, [rel num1]         ; Address for the first binary number
+    ; Prompt for second binary number
+    lea rsi, [rel tb2]
+    call print_string
+    lea rsi, [rel buffer]
     call read_binary
-
-    ; Input second binary number
-    mov rdx, 42                 ; Length of msg2
-    lea rsi, [rel msg2]         ; RIP-relative addressing for msg2
-    call print_string
-
-    lea rsi, [rel num2]         ; Address for the second binary number
-    call read_binary
-
-    ; Convert binary to decimal and add
-    lea rsi, [rel num1]
+    call validate_input             ; Check if input is valid
+    lea rsi, [rel buffer]
     call binary_to_decimal
-    mov rbx, rax                ; Store the first decimal number in rbx
+    mov word [rel b2], ax           ; Store result in b2
 
-    lea rsi, [rel num2]
-    call binary_to_decimal
-    add rbx, rax                ; Add second decimal number to rbx
-    and rbx, 0xFFFF             ; Limit the result to 16 bits
-
-    ; Convert result back to binary
-    mov rax, rbx                ; Move the result to rax
+    ; Perform addition of the two numbers
+    lea rsi, [rel tb3]
+    call print_string
+    mov ax, [rel b1]
+    add ax, [rel b2]                ; Add the two 16-bit numbers
     lea rsi, [rel result]
-    call decimal_to_binary
-
-    ; Debug: Check the result buffer
-    lea rsi, [rel result]
-    mov rdx, 17                 ; Print the entire result buffer (debugging step)
-    call print_string
-
-    ; Print the result
-    mov rdx, 24                 ; Length of msg3
-    lea rsi, [rel msg3]         ; RIP-relative addressing for msg3
-    call print_string
-
-    lea rsi, [rel result]       ; Address of result string
-    call print_string
-
-    ; Print a newline
-    lea rsi, [rel newline]
-    call print_string
+    call decimal_to_binary          ; Convert result to binary string
+    call print_string               ; Display result
+    call print_newline              ; Print newline for formatting
 
     ; Exit program
-    mov rax, 0x2000001          ; syscall: exit
-    xor rdi, rdi                ; status: 0
+    mov rax, 0x2000001              ; System call for exit
+    xor rdi, rdi                    ; Exit code 0
     syscall
 
-; Function to print a string using syscall
+; Function to print a string to standard output
 print_string:
-    mov rax, 0x2000004          ; syscall: write
-    mov rdi, 1                  ; file descriptor: stdout
+    mov rdx, 0                      ; Initialize length counter
+    mov rcx, rsi                    ; Load string address
+    call string_length              ; Get string length
+    mov rdx, rax                    ; Store length in rdx
+    mov rax, 0x2000004              ; System call for write
+    mov rdi, 1                      ; File descriptor: stdout
     syscall
     ret
 
-; Function to read a binary number from user input
+; Function to print a newline
+print_newline:
+    lea rsi, [rel newline]
+    call print_string
+    ret
+
+; Function to read binary input
 read_binary:
-    mov rax, 0x2000003          ; syscall: read
-    mov rdi, 0                  ; file descriptor: stdin
-    mov rdx, 17                 ; max bytes to read
+    mov rax, 0x2000003              ; System call for read
+    mov rdi, 0                      ; File descriptor: stdin
+    mov rdx, 18                     ; Max length to read (16 bits + newline + null terminator)
     syscall
+    sub rax, 1                      ; Remove newline character
+    mov byte [rsi + rax], 0         ; Null-terminate string
+    ret
 
-    ; Null-terminate input
-    sub rax, 1                  ; Adjust for the newline character
-    cmp rax, 0
-    jl show_invalid_msg         ; If no valid input, show invalid message
-    mov byte [rsi + rax], 0     ; Null-terminate the input
-
-    ; Validate input
-    xor rcx, rcx                ; Index for the input buffer
-    
+; Function to validate binary input
+validate_input:
+    xor rcx, rcx
+    cmp rax, 17                     ; Check if input exceeds 16 bits
+    jge invalid_input
 validate_loop:
-    mov dl, byte [rsi + rcx]    ; Load the current character
-    cmp dl, 0                   ; End of string (null terminator)?
-    je validate_done            ; If null, input is valid
-    cmp dl, '0'                 ; Is it '0'?
+    mov dl, byte [rsi + rcx]
+    cmp dl, 0
+    je validate_done
+    cmp dl, '0'
     je next_char
-    cmp dl, '1'                 ; Is it '1'?
+    cmp dl, '1'
     je next_char
-
     ; Invalid character found
-    jmp show_invalid_msg
-
+    jmp invalid_input
 next_char:
-    inc rcx                     ; Move to the next character
-    cmp rcx, 16                 ; Ensure input does not exceed 16 bits
-    jg show_invalid_msg         ; If exceeded, it's invalid
+    inc rcx
     jmp validate_loop
-
 validate_done:
     ret
 
-show_invalid_msg:
-    ; Print an error message for invalid input
-    lea rsi, [rel invalid_msg]  ; Load the invalid input message
+invalid_input:
+    lea rsi, [rel error_msg]
     call print_string
-    mov rax, 0x2000001          ; syscall: exit
-    xor rdi, rdi                ; status: 0
+    mov rax, 0x2000001
+    xor rdi, rdi
     syscall
 
 ; Function to convert binary string to decimal
 binary_to_decimal:
-    xor rax, rax                ; Clear rax for decimal result
-    xor rcx, rcx                ; Index
-
+    xor ax, ax                      ; Clear accumulator
+    xor rcx, rcx                    ; Index counter
 binary_loop:
     mov dl, byte [rsi + rcx]
-    cmp dl, 0
+    cmp dl, 0                       ; Check for null terminator
     je done_binary_conversion
-    shl rax, 1                  ; Shift left by 1
+    shl ax, 1                       ; Shift left to make space for next bit
     cmp dl, '1'
-    je set_bit
+    je set_bit                      ; If character is '1', set bit
     jmp next_bit
-
 set_bit:
-    or rax, 1                   ; Set the least significant bit
-
+    or ax, 1                        ; Set the least significant bit
 next_bit:
-    inc rcx
+    inc rcx                         ; Move to next character
     jmp binary_loop
-
 done_binary_conversion:
     ret
 
-; Function to convert decimal in rax to binary string
+; Function to convert decimal to binary string
 decimal_to_binary:
-    xor rcx, rcx                ; Bit position counter
-    mov rbx, 16                 ; Number of bits to process
-    mov rdi, rsi                ; Address of result buffer
-
-    ; Initialize buffer with '0' and null-terminate
-    mov rdx, 17
-fill_buffer:
-    mov byte [rdi + rcx], '0'
-    inc rcx
-    dec rdx
-    jnz fill_buffer
-    mov byte [rdi + 16], 0      ; Null-terminate the buffer
-
-    ; Convert decimal to binary
-    lea rdi, [rsi + 15]         ; Start at the end of the buffer
+    mov rcx, 16                     ; Process 16 bits
+    lea rdi, [rsi + 15]             ; Start at end of buffer
+    mov byte [rdi + 1], 0           ; Null-terminate result
 convert_loop:
-    test rax, 1                 ; Check the least significant bit
-    jz write_zero
-    mov byte [rdi], '1'
-    jmp shift_and_decrement
-
-write_zero:
+    test ax, 1                      ; Check least significant bit
     mov byte [rdi], '0'
-
-shift_and_decrement:
-    shr rax, 1                  ; Shift right by 1
-    dec rdi                     ; Move to the previous position
+    jz shift_bit
+    mov byte [rdi], '1'
+shift_bit:
+    shr ax, 1                       ; Shift right to process next bit
+    dec rdi                         ; Move to previous character in buffer
     loop convert_loop
+    ret
+
+; Function to get string length
+string_length:
+    xor rax, rax                    ; Clear counter
+count_loop:
+    cmp byte [rcx + rax], 0         ; Check for null terminator
+    je done_counting
+    inc rax                         ; Increment length counter
+    jmp count_loop
+done_counting:
     ret
