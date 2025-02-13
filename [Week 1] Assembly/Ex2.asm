@@ -5,8 +5,11 @@ section .data
     tb2     db "Enter second number: ",0x0A,0x0D
     tb2_len equ $-tb2
 
-    addMsg  db "A + B: ",0x0A,0x0D
+    addMsg  db "The sum is: ",0x0A,0x0D
     addMsg_len equ $-addMsg
+
+    errorMsg db "Invalid input! Please enter a valid number.", 0x0A, 0x0D
+    errorMsg_len equ $-errorMsg
 
 section .bss
     inputBuffer   resb 32      ; Buffer to store the input
@@ -31,7 +34,8 @@ _start:
     lea     rsi, [rel inputBuffer]
     mov     rdx, 32
     syscall
-    call    convert_input_to_int    ; result in RBX
+    call    validate_input       ; Validate input
+    call    convert_input_to_int ; Convert input to integer
     mov     qword [rel b1], rbx
 
     ; Prompt for second number
@@ -47,6 +51,7 @@ _start:
     lea     rsi, [rel inputBuffer]
     mov     rdx, 32
     syscall
+    call    validate_input       ; Validate input
     call    convert_input_to_int
     mov     qword [rel b2], rbx
 
@@ -66,6 +71,32 @@ _start:
     mov     rax, 0x2000001      ; sys_exit
     xor     rdi, rdi
     syscall
+
+; Function to validate input
+validate_input:
+    lea     rsi, [rel inputBuffer]
+    xor     rcx, rcx
+.validate_loop:
+    mov     al, [rsi + rcx]
+    cmp     al, 0x0A           ; Check for newline
+    je      .valid
+    cmp     al, '0'            ; Must be at least '0'
+    jb      .invalid
+    cmp     al, '9'            ; Must be at most '9'
+    ja      .invalid
+    inc     rcx
+    jmp     .validate_loop
+.invalid:
+    mov     rax, 0x2000004      ; sys_write
+    mov     rdi, 1              ; stdout
+    lea     rsi, [rel errorMsg]
+    mov     rdx, errorMsg_len
+    syscall
+    mov     rax, 0x2000001      ; sys_exit
+    xor     rdi, rdi
+    syscall
+.valid:
+    ret
 
 ; convert_input_to_int:
 convert_input_to_int:
