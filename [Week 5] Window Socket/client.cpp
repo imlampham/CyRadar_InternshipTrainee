@@ -1,9 +1,8 @@
-﻿#include <winsock2.h>
+﻿#define _WIN32_WINNT 0x501 
+#include <winsock2.h>
 #include <ws2tcpip.h>
 #include <stdio.h>
 #include <thread>
-
-#pragma comment(lib, "Ws2_32.lib")
 
 #define DEFAULT_PORT "27015"
 #define DEFAULT_BUFLEN 512
@@ -16,7 +15,7 @@ void ReceiveMessages(SOCKET ConnectSocket) {
         iResult = recv(ConnectSocket, recvbuf, DEFAULT_BUFLEN, 0);
         if (iResult > 0) {
             recvbuf[iResult] = '\0';
-            printf("Received: %s\n", recvbuf);
+            printf("\nReceived: %s\n", recvbuf);
             printf("Enter message: ");
         }
         else if (iResult == 0) {

@@ -4,11 +4,28 @@
 #include <stdio.h>
 #include <vector>
 #include <thread>         
+#include <string>
 
 #define DEFAULT_PORT "27015"
 #define DEFAULT_BUFLEN 512
 
 std::vector<SOCKET> clients;
+
+void SendMessages() {
+    char sendbuf[DEFAULT_BUFLEN];
+    while (true) {
+        printf("Server message: ");
+        fgets(sendbuf, DEFAULT_BUFLEN, stdin);
+
+        size_t len = strlen(sendbuf);
+        if (len > 0 && sendbuf[len - 1] == '\n')
+            sendbuf[len - 1] = '\0';
+
+        for (SOCKET client : clients) {
+            send(client, sendbuf, (int)strlen(sendbuf), 0);
+        }
+    }
+}
 
 void ClientHandler(SOCKET clientSocket) {
     char recvbuf[DEFAULT_BUFLEN];
@@ -103,6 +120,9 @@ int main() {
     }
 
     printf("Server started. Waiting for connections...\n");
+
+    std::thread sendThread(SendMessages);
+    sendThread.detach();
 
     while (true) {
         ClientSocket = accept(ListenSocket, NULL, NULL);
